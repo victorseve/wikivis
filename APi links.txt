@@ -1,0 +1,5 @@
+https://fr.wikipedia.org/api/rest_v1/page/summary/Voltaire
+
+https://fr.wikipedia.org/api/rest_v1/page/metadata/Voltaire
+
+https://www.wikidata.org/wiki/Special:EntityData/Q9068.json

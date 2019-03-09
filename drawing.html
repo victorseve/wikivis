@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Page Title</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <canvas></canvas>
+  <label><input name='color' type='color' id='color'>Color</label>
+  <button id='pen'>Pen</button>
+  <button id='eraser'>Eraser</button>
+  <label><input type='range' name='radius' id='radius'>Range</label>
+  <hr/>
+  <button id='select'>Select</button>
+  <hr/>
+  <button id='text'>Text</button>
+</body>
+
+<style>
+  canvas {
+    border: solid 1px;
+  }
+  .is-active {
+    background: blue;
+  }
+</style>
+
+<script>
+    
+  let canvas = document.querySelector('canvas')
+  canvas.width = canvas.height = 500;
+  ctx = canvas.getContext('2d')
+  let colorBtn = document.getElementById('color')
+  let radiusBtn = document.getElementById('radius')
+
+  var PenModule = (function(props) {
+
+    let { canvas, color, radius, eraser } = props;
+    let ctx = canvas.getContext('2d');
+
+    color = color || {value: 'black'};  radius = radius || {value: 2};
+    let path = null, paths = []
+    let active = false, erase = false;
+
+    function isActive() { return active }
+    function isEraser() { return erase }
+
+    function toggleEraser() {
+      return erase = !erase
+    }
+
+    function toggle() {
+      isActive() ? desactivate() : activate();
+    }
+    
+    function activate() {
+      canvas.addEventListener('mousedown', startDrawing)
+      canvas.addEventListener('mouseup', endDrawing)
+      active = true
+    }
+    function desactivate() {
+      canvas.removeEventListener('mousedown', startDrawing)
+      canvas.removeEventListener('mouseup', endDrawing)
+      active = false
+    }
+
+    function startDrawing() {
+      ctx.strokeStyle = color.value;
+      ctx.lineWidth = radius.value;
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.globalCompositeOperation = isEraser() ? 'destination-out' : 'source-over';
+      path = new Path2D();
+      canvas.addEventListener('mousemove', draw)
+    }
+    function endDrawing() {
+      canvas.removeEventListener('mousemove', draw)
+    }
+
+    function draw(e) {
+      let coords = mouseCoordinates(e)
+      path.lineTo(...Object.values(coords));
+      ctx.stroke(path);
+      paths.push(path)
+    }
+
+    function mouseCoordinates(e) {
+      const offsetX = canvas.getBoundingClientRect().x;
+      const offsetY = canvas.getBoundingClientRect().y;
+      const mouseX = parseInt(e.clientX - offsetX);
+      const mouseY = parseInt(e.clientY - offsetY);
+      return {x: mouseX, y: mouseY}
+    }
+
+    function getPaths() {
+      return paths
+    }
+
+    return {
+      activate: activate,
+      desactivate: desactivate,
+      isActive: isActive,
+      toggle: toggle,
+      toggleEraser: toggleEraser,
+      paths: getPaths
+    }
+  })({ canvas: canvas, color: colorBtn, radius: radiusBtn });
+
+  (function() {
+    document.getElementById('pen').addEventListener('click', function() {
+      PenModule.toggle();
+      this.classList.toggle('is-active');
+    })
+    document.getElementById('eraser').addEventListener('click', function() {
+      PenModule.toggleEraser();
+      this.classList.toggle('is-active');
+    })
+  })()
+
+</script>
+</html>

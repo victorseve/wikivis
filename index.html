@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Wikivis</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.js'></script>
+    <link rel="stylesheet" type="text/css" href='https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.css'>
+    <link rel="stylesheet" type="text/css" href='node_modules/bulma/css/bulma.css'>
+  </head>
+
+  <style>
+    #network {
+      width: 100%;
+      height: 80vh;
+      border: 1px solid lightgray;
+      padding: 0px;
+    }
+    #autocomplete-list {
+      position: absolute;
+      border: 1px solid #d4d4d4;
+      border-bottom: none;
+      border-top: none;
+      z-index: 99;
+      /*position the autocomplete items to be the same width as the container:*/
+      top: 100%;
+      left: 0;
+      right: 0;
+    }
+    #autocomplete-list div {
+      padding: 10px;
+      cursor: pointer;
+      background-color: #fff; 
+      border-bottom: 1px solid #d4d4d4; 
+    }
+    .autocomplete {
+      position: relative;
+      display: inline-flex;
+    }
+    #autocomplete-list div:hover {
+      background-color: #e9e9e9; 
+    }
+    #search {
+      background-color: #e9e9e9; 
+    }
+    #popup {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      background: white;
+      padding: 10px;
+      opacity: 0.9;
+      box-shadow: 3px 3px 13px 0px black;
+      border-radius: 5px;
+    }
+    canvas {
+      /* box-shadow: inset 0px 0px 18px 1px black; */
+    }
+    .input {
+      display: inline;
+    } 
+    .button {
+      display: inline;
+    }
+    .vis-config-item {
+      background: white !important;
+    }
+    #configure-panel {
+      width: 100%;
+    }
+    .vis-configuration-wrapper {
+      width: 100%
+    }
+    .vis-config-range {
+      width: 70px !important;
+    }
+    #node-configure {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      background: white;
+      border-radius: 5px;
+      box-shadow: 3px 3px 5px 0 black;
+      padding: 10px;
+      width: 270px;
+    }
+    #node-configure input {
+      position: absolute;
+      left: 120px;
+    }
+    #node-configure .s1 {
+      margin-left: 10px;
+      font-style: italic;
+      font-weight: 500;
+    }
+    #node-configure .s2 {
+      margin-left: 20px;
+    }
+    .container {
+      margin-top: 4vh;
+    }
+    .is-active {
+      background: blue;
+    }
+
+</style>
+  <body class='container is-fluid'>
+    <h1 class='title is-2'></h1>
+    <div class='columns'>
+      <form>
+        <div class='autocomplete column is-pulled-left'>
+          <input type='text'class="input" name='title' value='' id='search' placeholder='Rechercher'>
+          <div id='autocomplete-list'></div>
+          <button class='button' type='submit'>Insérer noeud</button>
+        </div>
+      </form>
+      <div class='column is-pulled-right'>
+        <button class='button is-pulled-right' type='button' onclick='return saveGraph()'>Save</button>
+        <button class='button is-pulled-right' type='button' onclick='return loadGraph()'>Load</button>
+      </div>
+    </div>
+    <div class='columns'>
+      <div class='column is-12' id='network'></div>
+      <div class='column is-2' id='configure-panel'></div>
+    </div>
+
+    <!-- <label><input id='drawing-color' type='color' id='color'>Color</label>
+    <button id='pen'>Pen</button>
+    <button id='eraser'>Eraser</button>
+    <label><input type='range' id='drawing-radius' id='radius'>Range</label> -->
+
+    <div class='columns is-centered'>
+      <div id='response' class='column is-11'></div>
+    </div>
+    <div id='popup'></div>
+    <div id='node-configure'>
+      <form id='node-configure-form'>
+        <div id='node-configure-form-nodes'>
+          <p class='item s0'><b>Node</b></p>
+          <p class='item s2'><label>Size:<input name='node-size' type='range' min='15' max='70'></label></p>
+          <p class='item s1'>Border</p>
+          <p class='item s2'><label>Toggle:<input name='node-border-toggle' type='checkbox'></label></p>
+          <p class='item s2'><label>Width:<input name='node-border-width' type='range' min='-1' max='50'></label></p>
+          <p class='item s2'><label>Color:<input name='node-border-color' type='color'></label></p>
+          <p class='item s1'>Font</p>
+          <p class='item s2'><label>Size:<input name='node-font-size' type='range' min='1' max='40'></label></p>
+          <p class='item s2'><label>Color:<input name='node-font-color' type='color'></label></p>
+          <p class='item s2'><label>Background:<input name='node-font-back' type='color'></label></p>
+        </div>
+        <p class='item s0'><b>Edge</b></p>
+        <p class='item s2'><label>Width:<input name='edge-width' type='range' min='1' max='10'></label></p>
+        <p class='item s2'><label>Color:<input name='edge-color' type='color'></label></p>
+      </form>
+      <hr/>
+      <center><button id='apply-custom-style'>Apply</button></center>
+    </div>
+  </body>
+
+  <script>
+
+  function matchNodeStyle(node, edges) {
+    var setInputValue = (name, value) => document.querySelector(`input[name=${name}]`).value = value;
+    document.querySelector(`input[name=node-border-toggle]`).checked = node.shapeProperties && node.shapeProperties.useBorderWithImage
+    setInputValue('node-size', node.size) 
+    setInputValue('node-border-width', node.borderWidth) 
+    setInputValue('node-border-color', node.color) 
+    setInputValue('node-font-size', node.font.size) 
+    setInputValue('node-font-color', node.font.color) 
+    setInputValue('node-font-back', node.font.background) 
+    setInputValue('edge-color', edges[0].color.color) 
+    setInputValue('edge-width', edges[0].width) 
+  }
+
+  function updateNodeStyle(nodes, edges, self) {
+    var inputValue = (name) => document.querySelector(`input[name=${name}]`).value
+    for (let node of nodes) {
+      node.shapeProperties = { useBorderWithImage: document.querySelector(`input[name=node-border-toggle]`).checked }
+      node.size = parseInt(inputValue('node-size'))
+      node.borderWidth = parseInt(inputValue('node-border-width'))
+      node.borderWidthSelected = 2*node.borderWidth
+      node.color = inputValue('node-border-color')
+      node.font.size = parseInt(inputValue('node-font-size'))
+      node.font.color = inputValue('node-font-color')
+      node.font.background = inputValue('node-font-back')
+    }
+    for (let edge of edges) {
+      edge.color = {color: inputValue('edge-color'), highlight: inputValue('edge-color'), hover: inputValue('edge-color')}
+      edge.width = parseInt(inputValue('edge-width'))
+    }
+    self.nodes.update(nodes)
+    edges.forEach(edge => self.edges.update(edge))
+  }
+
+    // optionFilter = function(option, path) {
+    //   const valids = [
+    //     'nodes-borderWidth', 'nodes-color-border', 'nodes-font-color', 'nodes-font-size', 'nodes-font-background', 
+    //     'edges-width', 'edges-color-color'
+    //   ]
+    //   for (let valid of valids) {
+    //     //if (option.concat(path).join('-').includes()indexOf(valid) !== -1) { return true }
+    //     return valids.includes(path.concat(option).join('-'))
+    //   }
+    //   return false
+    // }
+
+  const options = {
+    physics: {
+      enabled: false,
+      repulsion: {
+          centralGravity: 0.2,
+          springLength: 200,
+          springConstant: 0.01,
+          nodeDistance: 200,
+          damping: 0.09
+      },
+      solver: 'repulsion',
+      stabilization: {enabled: true}
+    },
+    edges: {smooth: {enabled: true, type: 'continuous'}, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, selectionWidth: function(width) { return width*2; }},
+    nodes: {size: 50},
+    manipulation: {enabled: true, addNode: false},
+    configure: {
+      enabled: false,
+      container: document.getElementById('configure-panel'),
+      showButton: false
+    },
+    interaction: {multiselect: true}
+  }
+
+    const wiki = require('./utils/wiki')
+
+    var container = document.getElementById('network');
+
+    document.getElementById('search').addEventListener('input', showSuggestions)
+    document.getElementById('search').addEventListener('focusout', () => setTimeout(emptySuggestionList, 100))
+
+    function emptySuggestionList() {
+      document.getElementById('autocomplete-list').innerHTML = ''
+    }
+
+    function showSuggestions(e) {
+      let list = document.getElementById('autocomplete-list')
+      if (!e.target.value) return
+      wiki.suggestions(e.target.value).then(results => {
+        list.innerHTML = ''
+        results.query.search.slice(0, 5).map(page => addSuggestion(page))
+      });
+      function addSuggestion(page) {
+        list.innerHTML += `<div onclick='return suggestionClicked(event)'>${page.title}</div>`
+      }
+    }
+    function suggestionClicked(e) {
+      console.log('click', e.target.innerText)
+      document.getElementById("search").value = e.target.innerText
+      document.getElementById('autocomplete-list').innerHTML = '';
+    }
+
+    var NodesDataset = function(nodes = [], edges = []) {
+      this.nodes = new vis.DataSet(nodes);
+      this.edges = new vis.DataSet(edges);
+      this.network = new vis.Network(container, {nodes: this.nodes, edges: this.edges}, options);
+      this.curr_id = nodes.length ? Math.max(...nodes.map(x => x.id))+1 : 0;
+      this.selected_node_id = null;
+      this.state = {
+        link: false
+      }
+      this.nodeCvt = function(props, color='', shape='image') {
+        return {
+          id: this.curr_id++,
+          label: prettify(props.summary.title),
+          image: props.summary.thumbnail !== undefined ? props.summary.thumbnail.source : shape='dot',
+          shape: shape,
+          chosen: {
+            node: this.clickCallback.bind(this)
+          },
+          data: {summary: props.summary},
+          font: {size: 14, color: '#000000', background: '#ffffff'},
+          borderWidth: 1,
+          size: 30,
+          color: '#2b7ce9'
+        }
+      }
+      this.updateDataset = function(dataset) {
+        let self = this;
+        dataset.nodes.forEach(function(node) { node.chosen = { node: self.clickCallback.bind(self)} })
+        this.nodes.add(dataset.nodes);
+        this.edges.add(dataset.edges);
+      }
+      this.clickCallback = function(values, id, selected, hovering) {
+        // this.selected_node_id = id;
+        // this.showExtract(this.nodes.get(id));
+      }
+      this.networkClickCallback = function(params) {
+        //console.log('Click', params)
+        this.network_params = params
+        if (params.nodes.length) {
+          this.selected_node_id = params.nodes[0];
+          this.showExtract(this.nodes.get(params.nodes[0]))
+        }
+      }
+      this.styleFormCallback = function() {
+        updateNodeStyle(this.nodes.get(this.network_params.nodes), this.edges.get(this.network_params.edges), this)
+      }
+      this.styleFormCallback = this.styleFormCallback.bind(this)
+      this.applyStyleBtnCallback = function() {
+        // console.log('applystylecallback arguments', this.nodes.get(this.network_params.nodes[0]), this.edges.get(this.network_params.edges), this)
+        updateNodeStyle(this.nodes.get(this.network_params.nodes), this.edges.get(this.network_params.edges), this)
+        document.getElementById('node-configure').style.display = 'none'
+      }
+      this.applyStyleBtnCallback = this.applyStyleBtnCallback.bind(this);
+
+      (function(self) {
+        let style_form = document.getElementById('node-configure-form');
+        let apply_style_btn = document.getElementById('apply-custom-style');
+        style_form.addEventListener('change', self.styleFormCallback)
+        apply_style_btn.addEventListener('click', self.applyStyleBtnCallback)
+      })(this)
+
+      var hasNodesSelected = (params) => params.nodes!==undefined && params.nodes.length > 0;
+      var hasEdgesSelected = (params) => params.edges!==undefined && params.edges.length > 0;
+      var hasItemsSelected = (params) => hasNodesSelected(params) || hasEdgesSelected(params); 
+
+      this.networkContextCallback = function(params) {
+        //console.log('Network params', this.network_params)
+        if ( this.network.getNodeAt(params.pointer.DOM) === undefined ) {
+          //console.log('hasItemsSelected(this.network_params)', hasItemsSelected(this.network_params))
+          if ( !hasItemsSelected(this.network_params) ) { return } 
+          // else if ( !hasNodesSelected(params) ) { }
+        } else {
+          params.nodes = [this.network.getNodeAt(params.pointer.DOM)], 
+          this.network.selectNodes(params.nodes)
+          params.edges = this.network.getConnectedEdges(this.network.getNodeAt(params.pointer.DOM))
+          //document.elementFromPoint(...Object.values(params.pointer.DOM)).click();
+          //console.log('Context', params)
+          this.network_params = params
+        }
+        let customNodeDiv = document.getElementById('node-configure')
+        if (!params.nodes.length) {
+          document.getElementById('node-configure-form-nodes').style.display='none';
+        } else {
+          document.getElementById('node-configure-form-nodes').style.display='block';
+        }
+          customNodeDiv.style.display = 'block'
+          customNodeDiv.style.top = Math.min(window.innerHeight-customNodeDiv.offsetHeight-25, params.pointer.DOM.y) + 'px'
+          customNodeDiv.style.left = Math.min(window.innerWidth-customNodeDiv.offsetWidth-25, params.pointer.DOM.x) + 'px'
+          matchNodeStyle(this.nodes.get(params.nodes[0]), this.edges.get(params.edges))
+      }
+      this.network.on('click', this.networkClickCallback.bind(this))
+      this.network.on('dragStart', this.networkClickCallback.bind(this))
+      this.network.on('oncontext', this.networkContextCallback.bind(this))
+
+      this.showExtract = function(node) {
+        let div = document.getElementById('response');
+        let extract = node.data.summary.extract_html;
+        extract += `<p><a href="${node.data.summary.content_urls.desktop.page}" target="_blank" >Article Wikipedia</a></p>`
+        div.innerHTML = extract
+      }
+      this.nodeIndex = function(summary) {
+        return this.nodes.getIds({filter: node => node.label == summary.title})[0]
+      }
+      this.addEdge = function(startId, nodeId=this.curr_id-1) {
+        this.edges.add({from: startId, to: nodeId, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, width: 1})
+      }
+      this.addNode = function(props) {
+        var curr_id = null;
+        console.log(this.nodeIndex(props.summary))
+        if (this.nodeIndex(props.summary) === undefined) {
+          curr_id = this.curr_id
+          this.nodes.add(this.nodeCvt(props, '', shape='image'))
+          console.log('new node')
+        } else {
+          curr_id = this.nodeIndex(props.summary)
+          console.log('node already exists', curr_id)
+        }
+        let children_ids = [];
+        for (let children_summary of props.categories) {
+          let node_idx = this.nodeIndex(children_summary)
+          if (node_idx === undefined) {
+            children_ids.push(this.curr_id)
+            this.nodes.add(this.nodeCvt({summary: children_summary}, color = 'blue'));
+            this.addEdge(curr_id)
+          } else {
+            this.addEdge(curr_id, node_idx)
+          }
+        }
+        this.disperseNodes(curr_id, children_ids)
+        this.network.selectNodes(children_ids.concat(curr_id))
+      }
+      this.disperseNodes = function(parentId, childrenIds) {
+        const radius = 200;
+        let [xi, yi] = Object.values(this.network.getPositions(parentId)[parentId])
+        var position = (center, curr, total) => [xi + radius*Math.cos(2*curr*Math.PI/total), yi + radius*Math.sin(2*curr*Math.PI/total)] 
+        let self = this;
+        childrenIds.forEach((id, index) => self.network.moveNode(id, ...position(parentId, index, childrenIds.length)))
+      }
+      this.nodeEvent = function(e) {
+        if (document.activeElement === document.getElementById('search')) return;
+        switch(e.key) {
+          case 'd':
+            this.deleteNode();
+            break;
+          case 'a':
+            this.populateNode();
+            break;
+          case 'Control':
+            //this.state.link = !this.state.link;
+            //this.network.addEdgeMode();
+            break;
+        }
+      }
+      this.selectedId = function() {
+        return this.nodes.getIds({filter: node => node.id == this.selected_node_id})[0]
+      }
+      this.populateNode = function() {
+        let node = this.nodes.get(this.selectedId())
+        let title = node.data.summary.titles.canonical;
+        wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array))
+      }
+      this.deleteNode = function() {
+        console.log('initial length', this.nodes.length)
+        this.nodes.remove(this.selectedId())
+        let edge_map = {};
+        let edge_data = Object.values(this.edges._data), node_data = Object.values(this.nodes._data)
+        for (let node of node_data) {
+          edge_map[node.id] = [
+            ...edge_data.filter(e => e.from==node.id).map(e => e.to),
+            ...edge_data.filter(e => e.to==node.id).map(e => e.from)
+          ]
+        }
+        var isDetached = (node) => edge_map[node.id].length==1 && edge_map[node.id][0] == this.selected_node_id;
+        let detached_nodes = this.nodes.getIds({filter: isDetached})
+        this.nodes.remove(detached_nodes)
+        let deprecated_edges = this.edges.getIds({filter: edge => edge.from == this.selected_node_id})
+        this.edges.remove(deprecated_edges)
+        console.log('new length', this.nodes.length)
+
+        // new vis.Network(container, this.dataSet(), options={layout: {hierarchical: false}});
+      }
+      this.dataSet = function() {
+        return {nodes: new vis.DataSet(this.nodes), edges: new vis.DataSet(this.edges)}
+      }
+      document.body.addEventListener('keydown', this.nodeEvent.bind(this))
+      let self = this;
+      // this.network.on('dragEnd', function (params) {
+      //   for (let node of Object.values(self.nodes._data)) {
+      //     self.nodes.update({id: node.id, fixed: {x: false, y: false}});
+      //   }
+      // });
+      // this.network.on('dragStart', function(params) {
+      //   for (let node of Object.values(self.nodes._data)) {
+      //     if (node.id == self.selectedId()) continue;
+
+      //     self.nodes.update({id: node.id, fixed: {x: true, y: true}});
+      //   }
+      // });
+    } 
+
+    function displayPopup(data) {
+      console.log('popup', data)
+      let checkbox = (text) => `<p><label><input class='title-filter' type="checkbox" name="${text}">${text}</label></p>`
+      let html = data[1].map(d => checkbox(d.title)).join('');
+      html += '<button onclick="return filterSelectedNodes()">Valider</button>'
+      let popup = document.getElementById('popup')
+      popup.style.display = 'block'
+      popup.innerHTML = html
+      popup.style.top = '200px'; popup.style.left = '300px';
+      popup.data = data
+    }
+    function filterSelectedNodes() {
+      let popup = document.getElementById('popup');
+      let data = popup.data;
+      let selected_titles = [...document.querySelectorAll('input[type=checkbox]')].filter(x => x.checked).map(x => x.name);
+      console.log(selected_titles)
+      data[1] = data[1].filter(x => selected_titles.includes(x.title));
+      updateNetwork(data);
+      popup.style.display = 'none'
+    }
+
+    var visDS = new NodesDataset()
+    // let networkCanvas = document.querySelector('canvas');
+
+    // function canvasCopy() {
+    //   let canvas = document.querySelector('canvas')
+    //   let copy = document.createElement('canvas');
+    //   copy.width = canvas.width, copy.height = canvas.height;
+
+    //   document.body.appendChild(copy)
+    //   copy.style.position = 'fixed';
+    //   copy.style.zIndex = -1
+    //   canvas_position = canvas.getBoundingClientRect()
+    //   copy.style.left = canvas_position.x+'px'; copy.style.top = canvas_position.y+'px';
+    //   console.log(copy)
+    //   return copy
+    // }
+
+    // const drawingModule = require('./utils/penTool')
+    // let drawingBtns = {
+    //   canvas: canvasCopy(),
+    //   color: document.getElementById('drawing-color'),
+    //   radius: document.getElementById('drawing-radius'),
+    // };
+
+    // document.addEventListener('DOMContentLoaded', function() {
+    //   console.log('content has loaded')
+    //   var myPen = drawingModule.penTool({ canvas: drawingBtns.canvas, color: drawingBtns.color, radius: drawingBtns.radius })
+
+    //   var attachEvents = (function() {
+    //     document.getElementById('pen').addEventListener('click', function() {
+    //       myPen.toggle();
+    //       this.classList.toggle('is-active');
+    //     })
+    //     document.getElementById('eraser').addEventListener('click', function() {
+    //       myPen.toggleEraser();
+    //       this.classList.toggle('is-active');
+    //     })
+    //     visDS.network.on('zoom', function() { myPen.transformContext(visDS.network.canvas.body.view) })
+    //     visDS.network.on('dragging', function() { myPen.transformContext(visDS.network.canvas.body.view) })
+    //     // visDS.network.on('zoom', function(p) { console.log(p) })
+    //     // visDS.network.on('dragging', function(p) { console.log(p) })
+    //   })()
+    // });
+
+
+
+    const extract = {
+      relatedTitles: (data) => data.pages.map(page => page.title),
+      categoryTitles: (data) => data.categories.filter(category => !category.hidden).map(category => category.titles.canonical)
+    }
+    function prettify(string) {
+      //return string.includes('C:') ? string.split(':')[1] : string.slice(string.lastIndexOf(' '));
+      return string.replace('Catégorie:', '')
+    }
+
+    function updateNetwork(array) {
+      let [summary, meta, relations] = array
+      let props = {
+        summary: summary,
+        relations: relations, 
+        categories: meta
+      }
+      visDS.addNode(props)
+      // new vis.Network(container, visDS.dataSet(), options={layout: {hierarchical: false}});
+    }
+
+    async function fillChilds(array) {
+      let [summary, meta, relations] = array
+      let d =  await Promise.all([
+        wiki.images(extract.relatedTitles(relations)),
+        wiki.images(extract.categoryTitles(meta))
+      ])
+      return [summary, ...d]
+    }
+
+    document.querySelector('form').addEventListener('submit', function(e) {
+      let title = document.querySelector('input[name=title]').value
+      if (!title.length) return
+      document.querySelector('input[name=title]').value = ''
+      e.preventDefault()
+      wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array)).catch(err => console.log(err))
+    })
+
+    function saveGraph() {
+      const { dialog } = require('electron').remote
+      const fs = require('fs');
+      var fileExists = (filename) => fs.readdir('saves', (err, files) => files.includes(filename));
+      visDS.network.storePositions();
+      let nodes = Object.values(visDS.nodes._data)
+      let edges = Object.values(visDS.edges._data)
+      let data = JSON.stringify({nodes: nodes, edges: edges})
+      confirmed = false;
+      while (confirmed !== true) {
+        var filename = dialog.showSaveDialog({title: 'Save', message: 'Enter filename'})
+        if (fileExists(filename)) {
+          confirmed = prompt('This filename already exists. Continue?') 
+        } else { confirmed = true}
+      }
+      fs.writeFile(filename, data, function(err) {
+          if(err) {
+            return console.log(err);
+          }
+          console.log("File saved");
+      }); 
+    }
+
+    function loadGraph() {
+      const fs = require('fs');
+      const { dialog } = require('electron').remote
+      dialog.showOpenDialog(filename => loadNetwork(filename[0]))
+      function loadNetwork(filepath) {
+        fs.readFile(filepath, 'utf-8', (err, data) => {
+          if (err) { return console.log("An error ocurred reading the file :" + err.message); }
+          visDS.updateDataset(JSON.parse(data))
+        })
+      }
+    }
+
+    // function showRelations(title) {
+    //   wiki.relations(title).then(relations => {
+    //     let titles = relations.pages.map(page => page.title)
+    //     htmlRelations(titles)
+    //   })
+    // }
+
+    // function htmlRelations(relations) {
+    //   let list_elements = '<ul>' + relations.map(r => `
+    //     <li><a href=''>${r}</a></li>
+    //   `).join('') + '</ul>'
+    //   document.getElementById('response').innerHTML = list_elements
+    //   attachEvent();
+    // }
+
+    // function attachEvent() {
+    //   [...document.querySelectorAll('a')].map(el => el.addEventListener('click', function(e) {
+    //     e.preventDefault()
+    //     console.log(this.innerText)
+    //     showRelations(this.innerText)
+    //   }))
+    // }
+
+    link = (title) => `<a href=''></a>`
+  </script>
+</html>
