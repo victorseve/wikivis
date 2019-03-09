@@ -38,6 +38,4 @@ var SuggestionModule = (function(props) {
 
 })
 
-module.exports = {
-  suggestionModule: SuggestionModule
-}
+module.exports = SuggestionModule
