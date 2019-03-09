@@ -16,33 +16,7 @@
       border: 1px solid lightgray;
       padding: 0px;
     }
-    #autocomplete-list {
-      position: absolute;
-      border: 1px solid #d4d4d4;
-      border-bottom: none;
-      border-top: none;
-      z-index: 99;
-      /*position the autocomplete items to be the same width as the container:*/
-      top: 100%;
-      left: 0;
-      right: 0;
-    }
-    #autocomplete-list div {
-      padding: 10px;
-      cursor: pointer;
-      background-color: #fff; 
-      border-bottom: 1px solid #d4d4d4; 
-    }
-    .autocomplete {
-      position: relative;
-      display: inline-flex;
-    }
-    #autocomplete-list div:hover {
-      background-color: #e9e9e9; 
-    }
-    #search {
-      background-color: #e9e9e9; 
-    }
+
     #popup {
       display: none;
       position: fixed;
@@ -115,8 +89,8 @@
         </div>
       </form>
       <div class='column is-pulled-right'>
-        <button class='button is-pulled-right' type='button' onclick='return saveGraph()'>Save</button>
-        <button class='button is-pulled-right' type='button' onclick='return loadGraph()'>Load</button>
+        <button class='button is-pulled-right' type='button' id='btn-saveGraph'>Save</button>
+        <button class='button is-pulled-right' type='button' id='btn-loadGraph'>Load</button>
       </div>
     </div>
     <div class='columns'>
@@ -132,9 +106,17 @@
 
   <script>
 
-    var configComponent = document.querySelector('link[rel="import"]').import;
-    var el = configComponent.querySelector('#node-configure')
-    document.body.appendChild(el.cloneNode(true));
+    const wiki = require('./utils/wiki')
+
+    const suggestions = require('./utils/suggestions')
+    suggestions({ search: document.getElementById('search'), list: document.getElementById('autocomplete-list'), async: wiki.suggestions });
+
+    (function() {
+      var configComponent = document.querySelector('link[rel="import"]').import;
+      var el = configComponent.querySelector('#node-configure')
+      document.body.appendChild(el.cloneNode(true));
+    })()
+
 
 
   function matchNodeStyle(node, edges) {
@@ -150,41 +132,11 @@
     setInputValue('edge-width', edges[0].width) 
   }
 
-  function updateNodeStyle(nodes, edges, self) {
-    var inputValue = (name) => document.querySelector(`input[name=${name}]`).value
-    for (let node of nodes) {
-      node.shapeProperties = { useBorderWithImage: document.querySelector(`input[name=node-border-toggle]`).checked }
-      node.size = parseInt(inputValue('node-size'))
-      node.borderWidth = parseInt(inputValue('node-border-width'))
-      node.borderWidthSelected = 2*node.borderWidth
-      node.color = inputValue('node-border-color')
-      node.font.size = parseInt(inputValue('node-font-size'))
-      node.font.color = inputValue('node-font-color')
-      node.font.background = inputValue('node-font-back')
-    }
-    for (let edge of edges) {
-      edge.color = {color: inputValue('edge-color'), highlight: inputValue('edge-color'), hover: inputValue('edge-color')}
-      edge.width = parseInt(inputValue('edge-width'))
-    }
-    self.nodes.update(nodes)
-    edges.forEach(edge => self.edges.update(edge))
-  }
+
 
   const options = {
-    physics: {
-      enabled: false,
-      repulsion: {
-          centralGravity: 0.2,
-          springLength: 200,
-          springConstant: 0.01,
-          nodeDistance: 200,
-          damping: 0.09
-      },
-      solver: 'repulsion',
-      stabilization: {enabled: true}
-    },
+    physics: { enabled: false },
     edges: {smooth: {enabled: true, type: 'continuous'}, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, selectionWidth: function(width) { return width*2; }},
-    nodes: {size: 50},
     manipulation: {enabled: true, addNode: false},
     configure: {
       enabled: false,
@@ -194,31 +146,22 @@
     interaction: {multiselect: true}
   }
 
-    const wiki = require('./utils/wiki')
-    const suggestions = require('./utils/suggestions')
-
     var container = document.getElementById('network');
 
-    suggestions.suggestionModule({ search: document.getElementById('search'), list: document.getElementById('autocomplete-list'), async: wiki.suggestions })
+    var NodesDataset = function() {
 
-    var NodesDataset = function(nodes = [], edges = []) {
-      this.nodes = new vis.DataSet(nodes);
-      this.edges = new vis.DataSet(edges);
-      this.network = new vis.Network(container, {nodes: this.nodes, edges: this.edges}, options);
-      this.curr_id = nodes.length ? Math.max(...nodes.map(x => x.id))+1 : 0;
-      this.selected_node_id = null;
-      this.state = {
-        link: false
-      }
-      this.nodeCvt = function(props, color='', shape='image') {
+      let nodes = new vis.DataSet();
+      let edges = new vis.DataSet();
+      let network = new vis.Network(container, {nodes: nodes, edges: edges}, options);
+      let curr_id = 0;
+      let selected_node_id = null;
+
+      function dataToNode(props, color='', shape='image') {
         return {
-          id: this.curr_id++,
-          label: prettify(props.summary.title),
+          id: curr_id++,
+          label: props.summary.title,
           image: props.summary.thumbnail !== undefined ? props.summary.thumbnail.source : shape='dot',
           shape: shape,
-          chosen: {
-            node: this.clickCallback.bind(this)
-          },
           data: {summary: props.summary},
           font: {size: 14, color: '#000000', background: '#ffffff'},
           borderWidth: 1,
@@ -227,30 +170,26 @@
         }
       }
       this.updateDataset = function(dataset) {
-        let self = this;
-        dataset.nodes.forEach(function(node) { node.chosen = { node: self.clickCallback.bind(self)} })
-        this.nodes.add(dataset.nodes);
-        this.edges.add(dataset.edges);
+        nodes.add(dataset.nodes);
+        edges.add(dataset.edges);
+        curr_id = Math.max(...dataset.nodes.map(x => x.id)) + 1
       }
-      this.clickCallback = function(values, id, selected, hovering) {
-        // this.selected_node_id = id;
-        // this.showExtract(this.nodes.get(id));
-      }
+
+      // Callback HELL!!
       this.networkClickCallback = function(params) {
-        //console.log('Click', params)
         this.network_params = params
         if (params.nodes.length) {
-          this.selected_node_id = params.nodes[0];
-          this.showExtract(this.nodes.get(params.nodes[0]))
+          selected_node_id = params.nodes[0];
+          showExtract(document.getElementById('response'), nodes.get(params.nodes[0]))
         }
       }
       this.styleFormCallback = function() {
-        updateNodeStyle(this.nodes.get(this.network_params.nodes), this.edges.get(this.network_params.edges), this)
+        updateStyle(nodes.get(this.network_params.nodes), edges.get(this.network_params.edges), this)
       }
       this.styleFormCallback = this.styleFormCallback.bind(this)
+
       this.applyStyleBtnCallback = function() {
-        // console.log('applystylecallback arguments', this.nodes.get(this.network_params.nodes[0]), this.edges.get(this.network_params.edges), this)
-        updateNodeStyle(this.nodes.get(this.network_params.nodes), this.edges.get(this.network_params.edges), this)
+        updateStyle(nodes.get(this.network_params.nodes), edges.get(this.network_params.edges), this)
         document.getElementById('node-configure').style.display = 'none'
       }
       this.applyStyleBtnCallback = this.applyStyleBtnCallback.bind(this);
@@ -267,17 +206,12 @@
       var hasItemsSelected = (params) => hasNodesSelected(params) || hasEdgesSelected(params); 
 
       this.networkContextCallback = function(params) {
-        //console.log('Network params', this.network_params)
-        if ( this.network.getNodeAt(params.pointer.DOM) === undefined ) {
-          //console.log('hasItemsSelected(this.network_params)', hasItemsSelected(this.network_params))
+        if ( network.getNodeAt(params.pointer.DOM) === undefined ) {
           if ( !hasItemsSelected(this.network_params) ) { return } 
-          // else if ( !hasNodesSelected(params) ) { }
         } else {
-          params.nodes = [this.network.getNodeAt(params.pointer.DOM)], 
-          this.network.selectNodes(params.nodes)
-          params.edges = this.network.getConnectedEdges(this.network.getNodeAt(params.pointer.DOM))
-          //document.elementFromPoint(...Object.values(params.pointer.DOM)).click();
-          //console.log('Context', params)
+          params.nodes = [network.getNodeAt(params.pointer.DOM)], 
+          network.selectNodes(params.nodes)
+          params.edges = network.getConnectedEdges(network.getNodeAt(params.pointer.DOM))
           this.network_params = params
         }
         let customNodeDiv = document.getElementById('node-configure')
@@ -286,98 +220,125 @@
         } else {
           document.getElementById('node-configure-form-nodes').style.display='block';
         }
-          customNodeDiv.style.display = 'block'
-          customNodeDiv.style.top = Math.min(window.innerHeight-customNodeDiv.offsetHeight-25, params.pointer.DOM.y) + 'px'
-          customNodeDiv.style.left = Math.min(window.innerWidth-customNodeDiv.offsetWidth-25, params.pointer.DOM.x) + 'px'
-          matchNodeStyle(this.nodes.get(params.nodes[0]), this.edges.get(params.edges))
+        customNodeDiv.style.display = 'block'
+        customNodeDiv.style.top = Math.min(window.innerHeight-customNodeDiv.offsetHeight-25, params.pointer.DOM.y) + 'px'
+        customNodeDiv.style.left = Math.min(window.innerWidth-customNodeDiv.offsetWidth-25, params.pointer.DOM.x) + 'px'
+        matchNodeStyle(nodes.get(params.nodes[0]), edges.get(params.edges))
       }
-      this.network.on('click', this.networkClickCallback.bind(this))
-      this.network.on('dragStart', this.networkClickCallback.bind(this))
-      this.network.on('oncontext', this.networkContextCallback.bind(this))
+      network.on('click', this.networkClickCallback.bind(this))
+      network.on('dragStart', this.networkClickCallback.bind(this))
+      network.on('oncontext', this.networkContextCallback.bind(this))
 
-      this.showExtract = function(node) {
-        let div = document.getElementById('response');
+      function updateStyle(affected_nodes, affected_edges) {
+        var inputValue = (name) => document.querySelector(`input[name=${name}]`).value;
+        
+        nodes.update(affected_nodes.map(node => updateNodeStyle(node)))
+        edges.update(affected_edges.map(edge => updateEdgeStyle(edge)))
+
+        function updateNodeStyle(node) {
+          node.shapeProperties = { useBorderWithImage: document.querySelector(`input[name=node-border-toggle]`).checked }
+          node.size = parseInt(inputValue('node-size'))
+          node.borderWidth = parseInt(inputValue('node-border-width'))
+          node.borderWidthSelected = 2*node.borderWidth
+          node.color = inputValue('node-border-color')
+          node.font.size = parseInt(inputValue('node-font-size'))
+          node.font.color = inputValue('node-font-color')
+          node.font.background = inputValue('node-font-back')
+          return node
+        }
+        function updateEdgeStyle(edge) {
+          edge.color = {color: inputValue('edge-color'), highlight: inputValue('edge-color'), hover: inputValue('edge-color')}
+          edge.width = parseInt(inputValue('edge-width'))
+          return edge
+        }
+      }
+
+      // End of Callback HELL!!
+
+      function showExtract(target, node) {
         let extract = node.data.summary.extract_html;
         extract += `<p><a href="${node.data.summary.content_urls.desktop.page}" target="_blank" >Article Wikipedia</a></p>`
-        div.innerHTML = extract
+        target.innerHTML = extract
       }
-      this.nodeIndex = function(summary) {
-        return this.nodes.getIds({filter: node => node.label == summary.title})[0]
-      }
-      this.addEdge = function(startId, nodeId=this.curr_id-1) {
-        this.edges.add({from: startId, to: nodeId, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, width: 1})
-      }
+
       this.addNode = function(props) {
-        var curr_id = null;
-        if (this.nodeIndex(props.summary) === undefined) {
-          curr_id = this.curr_id
-          this.nodes.add(this.nodeCvt(props, '', shape='image'))
-          console.log('new node')
+        var node_id = null;
+        if (nodeIndexFromTitle(props.summary) === undefined) {
+          node_id = curr_id
+          nodes.add(dataToNode(props, '', shape='image'))
         } else {
-          curr_id = this.nodeIndex(props.summary)
-          console.log('node already exists', curr_id)
+          node_id = nodeIndexFromTitle(props.summary)
         }
         let children_ids = [];
-        for (let children_summary of props.categories) {
-          let node_idx = this.nodeIndex(children_summary)
-          if (node_idx === undefined) {
-            children_ids.push(this.curr_id)
-            this.nodes.add(this.nodeCvt({summary: children_summary}, color = 'blue'));
-            this.addEdge(curr_id)
+        props.categories.map(summary => addChildren(summary))
+
+        disperseNodes(node_id, children_ids)
+        network.selectNodes(children_ids.concat(node_id))
+
+        function nodeIndexFromTitle(summary) {
+          return nodes.getIds({filter: node => node.label == summary.title})[0]
+        }
+        function addEdge(startId, nodeId=curr_id-1) {
+          edges.add({from: startId, to: nodeId, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, width: 1})
+        }
+        function addChildren(summary) {
+          let id = nodeIndexFromTitle(summary)
+          if (id === undefined) {
+            children_ids.push(curr_id)
+            nodes.add(dataToNode({summary: summary}));
+            addEdge(node_id)
           } else {
-            this.addEdge(curr_id, node_idx)
+            addEdge(node_id, id)
           }
         }
-        this.disperseNodes(curr_id, children_ids)
-        this.network.selectNodes(children_ids.concat(curr_id))
       }
-      this.disperseNodes = function(parentId, childrenIds) {
+      function disperseNodes(parentId, childrenIds) {
         const radius = 200;
-        let [xi, yi] = Object.values(this.network.getPositions(parentId)[parentId])
+        let [xi, yi] = Object.values(network.getPositions(parentId)[parentId])
         var position = (center, curr, total) => [xi + radius*Math.cos(2*curr*Math.PI/total), yi + radius*Math.sin(2*curr*Math.PI/total)] 
-        let self = this;
-        childrenIds.forEach((id, index) => self.network.moveNode(id, ...position(parentId, index, childrenIds.length)))
+        childrenIds.forEach((id, index) => network.moveNode(id, ...position(parentId, index, childrenIds.length)))
       }
-      this.nodeEvent = function(e) {
+      function keyEvent(e) {
         if (document.activeElement === document.getElementById('search')) return;
         switch(e.key) {
           case 'd':
-            this.deleteNode();
+            deleteSelectedNodes();
             break;
           case 'a':
-            this.populateNode();
+            populateNode();
             break;
         }
       }
-      this.selectedId = function() {
-        return this.nodes.getIds({filter: node => node.id == this.selected_node_id})[0]
-      }
-      this.populateNode = function() {
-        let node = this.nodes.get(this.selectedId())
+      function populateNode() {
+        let node = nodes.get(network.getSelectedNodes()[0])
         let title = node.data.summary.titles.canonical;
         wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array))
       }
-      this.deleteNode = function() {
-        this.nodes.remove(this.selectedId())
+      function deleteSelectedNodes() {
+        for (let id of network.getSelectedNodes()) {
+          deleteNode(id)
+        }
+      }
+      function deleteNode(id) {
+        nodes.remove(id)
         let edge_map = {};
-        let edge_data = Object.values(this.edges._data), node_data = Object.values(this.nodes._data)
+        let edge_data = Object.values(edges._data), node_data = Object.values(nodes._data)
         for (let node of node_data) {
           edge_map[node.id] = [
             ...edge_data.filter(e => e.from==node.id).map(e => e.to),
             ...edge_data.filter(e => e.to==node.id).map(e => e.from)
           ]
         }
-        var isDetached = (node) => edge_map[node.id].length==1 && edge_map[node.id][0] == this.selected_node_id;
-        let detached_nodes = this.nodes.getIds({filter: isDetached})
-        this.nodes.remove(detached_nodes)
-        let deprecated_edges = this.edges.getIds({filter: edge => edge.from == this.selected_node_id})
-        this.edges.remove(deprecated_edges)
+        var isDetached = (node) => edge_map[node.id].length==1 && edge_map[node.id][0] == selected_node_id;
+        let detached_nodes = nodes.getIds({filter: isDetached})
+        nodes.remove(detached_nodes)
+        let deprecated_edges = edges.getIds({filter: edge => edge.from == selected_node_id})
+        edges.remove(deprecated_edges)
       }
       this.dataSet = function() {
-        return {nodes: new vis.DataSet(this.nodes), edges: new vis.DataSet(this.edges)}
+        return {nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)}
       }
-      document.body.addEventListener('keydown', this.nodeEvent.bind(this))
-      let self = this;
+      document.body.addEventListener('keydown', keyEvent)
     } 
 
     function displayPopup(data) {
@@ -390,6 +351,7 @@
       popup.style.top = '200px'; popup.style.left = '300px';
       popup.data = data
     }
+
     function filterSelectedNodes() {
       let popup = document.getElementById('popup');
       let data = popup.data;
@@ -404,9 +366,6 @@
     const extract = {
       relatedTitles: (data) => data.pages.map(page => page.title),
       categoryTitles: (data) => data.categories.filter(category => !category.hidden).map(category => category.titles.canonical)
-    }
-    function prettify(string) {
-      return string.replace('Catégorie:', '')
     }
 
     function updateNetwork(array) {
@@ -436,40 +395,9 @@
       wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array)).catch(err => console.log(err))
     })
 
-    function saveGraph() {
-      const { dialog } = require('electron').remote
-      const fs = require('fs');
-      var fileExists = (filename) => fs.readdir('saves', (err, files) => files.includes(filename));
-      visDS.network.storePositions();
-      let nodes = Object.values(visDS.nodes._data)
-      let edges = Object.values(visDS.edges._data)
-      let data = JSON.stringify({nodes: nodes, edges: edges})
-      confirmed = false;
-      while (confirmed !== true) {
-        var filename = dialog.showSaveDialog({title: 'Save', message: 'Enter filename'})
-        if (fileExists(filename)) {
-          confirmed = prompt('This filename already exists. Continue?') 
-        } else { confirmed = true}
-      }
-      fs.writeFile(filename, data, function(err) {
-          if(err) {
-            return console.log(err);
-          }
-          console.log("File saved");
-      }); 
-    }
-
-    function loadGraph() {
-      const fs = require('fs');
-      const { dialog } = require('electron').remote
-      dialog.showOpenDialog(filename => loadNetwork(filename[0]))
-      function loadNetwork(filepath) {
-        fs.readFile(filepath, 'utf-8', (err, data) => {
-          if (err) { return console.log("An error ocurred reading the file :" + err.message); }
-          visDS.updateDataset(JSON.parse(data))
-        })
-      }
-    }
+    const saveManager = require('./utils/saveManager');
+    document.getElementById('btn-saveGraph').addEventListener('click', () => saveManager.save(visDS))
+    document.getElementById('btn-loadGraph').addEventListener('click', () => saveManager.load(visDS))
 
   </script>
 </html>

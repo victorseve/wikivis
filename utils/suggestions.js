@@ -4,7 +4,7 @@ var SuggestionModule = (function(props) {
   let asyncF = props.async
 
   $search.addEventListener('input', showSuggestions)
-  $list.addEventListener('focusout', () => setTimeout(emptySuggestionList, 100))
+  $search.addEventListener('focusout', () => setTimeout(emptySuggestionList, 100))
 
   function emptySuggestionList() { $list.innerHTML = '' }
 
