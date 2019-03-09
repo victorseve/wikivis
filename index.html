@@ -6,6 +6,7 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.js'></script>
     <link rel="stylesheet" type="text/css" href='https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.css'>
     <link rel="stylesheet" type="text/css" href='node_modules/bulma/css/bulma.css'>
+    <link rel="import" href="config.html">
   </head>
 
   <style>
@@ -123,39 +124,18 @@
       <div class='column is-2' id='configure-panel'></div>
     </div>
 
-    <label><input id='drawing-color' type='color' id='color'>Color</label>
-    <button id='pen'>Pen</button>
-    <button id='eraser'>Eraser</button>
-    <label><input type='range' id='drawing-radius' id='radius'>Range</label>
-
     <div class='columns is-centered'>
       <div id='response' class='column is-11'></div>
     </div>
     <div id='popup'></div>
-    <div id='node-configure'>
-      <form id='node-configure-form'>
-        <div id='node-configure-form-nodes'>
-          <p class='item s0'><b>Node</b></p>
-          <p class='item s2'><label>Size:<input name='node-size' type='range' min='15' max='70'></label></p>
-          <p class='item s1'>Border</p>
-          <p class='item s2'><label>Toggle:<input name='node-border-toggle' type='checkbox'></label></p>
-          <p class='item s2'><label>Width:<input name='node-border-width' type='range' min='-1' max='50'></label></p>
-          <p class='item s2'><label>Color:<input name='node-border-color' type='color'></label></p>
-          <p class='item s1'>Font</p>
-          <p class='item s2'><label>Size:<input name='node-font-size' type='range' min='1' max='40'></label></p>
-          <p class='item s2'><label>Color:<input name='node-font-color' type='color'></label></p>
-          <p class='item s2'><label>Background:<input name='node-font-back' type='color'></label></p>
-        </div>
-        <p class='item s0'><b>Edge</b></p>
-        <p class='item s2'><label>Width:<input name='edge-width' type='range' min='1' max='10'></label></p>
-        <p class='item s2'><label>Color:<input name='edge-color' type='color'></label></p>
-      </form>
-      <hr/>
-      <center><button id='apply-custom-style'>Apply</button></center>
-    </div>
   </body>
 
   <script>
+
+    var configComponent = document.querySelector('link[rel="import"]').import;
+    var el = configComponent.querySelector('#node-configure')
+    document.body.appendChild(el.cloneNode(true));
+
 
   function matchNodeStyle(node, edges) {
     var setInputValue = (name, value) => document.querySelector(`input[name=${name}]`).value = value;
@@ -190,18 +170,6 @@
     edges.forEach(edge => self.edges.update(edge))
   }
 
-    // optionFilter = function(option, path) {
-    //   const valids = [
-    //     'nodes-borderWidth', 'nodes-color-border', 'nodes-font-color', 'nodes-font-size', 'nodes-font-background', 
-    //     'edges-width', 'edges-color-color'
-    //   ]
-    //   for (let valid of valids) {
-    //     //if (option.concat(path).join('-').includes()indexOf(valid) !== -1) { return true }
-    //     return valids.includes(path.concat(option).join('-'))
-    //   }
-    //   return false
-    // }
-
   const options = {
     physics: {
       enabled: false,
@@ -227,32 +195,11 @@
   }
 
     const wiki = require('./utils/wiki')
+    const suggestions = require('./utils/suggestions')
 
     var container = document.getElementById('network');
 
-    document.getElementById('search').addEventListener('input', showSuggestions)
-    document.getElementById('search').addEventListener('focusout', () => setTimeout(emptySuggestionList, 100))
-
-    function emptySuggestionList() {
-      document.getElementById('autocomplete-list').innerHTML = ''
-    }
-
-    function showSuggestions(e) {
-      let list = document.getElementById('autocomplete-list')
-      if (!e.target.value) return
-      wiki.suggestions(e.target.value).then(results => {
-        list.innerHTML = ''
-        results.query.search.slice(0, 5).map(page => addSuggestion(page))
-      });
-      function addSuggestion(page) {
-        list.innerHTML += `<div onclick='return suggestionClicked(event)'>${page.title}</div>`
-      }
-    }
-    function suggestionClicked(e) {
-      console.log('click', e.target.innerText)
-      document.getElementById("search").value = e.target.innerText
-      document.getElementById('autocomplete-list').innerHTML = '';
-    }
+    suggestions.suggestionModule({ search: document.getElementById('search'), list: document.getElementById('autocomplete-list'), async: wiki.suggestions })
 
     var NodesDataset = function(nodes = [], edges = []) {
       this.nodes = new vis.DataSet(nodes);
@@ -362,7 +309,6 @@
       }
       this.addNode = function(props) {
         var curr_id = null;
-        console.log(this.nodeIndex(props.summary))
         if (this.nodeIndex(props.summary) === undefined) {
           curr_id = this.curr_id
           this.nodes.add(this.nodeCvt(props, '', shape='image'))
@@ -401,10 +347,6 @@
           case 'a':
             this.populateNode();
             break;
-          case 'Control':
-            //this.state.link = !this.state.link;
-            //this.network.addEdgeMode();
-            break;
         }
       }
       this.selectedId = function() {
@@ -416,7 +358,6 @@
         wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array))
       }
       this.deleteNode = function() {
-        console.log('initial length', this.nodes.length)
         this.nodes.remove(this.selectedId())
         let edge_map = {};
         let edge_data = Object.values(this.edges._data), node_data = Object.values(this.nodes._data)
@@ -431,31 +372,15 @@
         this.nodes.remove(detached_nodes)
         let deprecated_edges = this.edges.getIds({filter: edge => edge.from == this.selected_node_id})
         this.edges.remove(deprecated_edges)
-        console.log('new length', this.nodes.length)
-
-        // new vis.Network(container, this.dataSet(), options={layout: {hierarchical: false}});
       }
       this.dataSet = function() {
         return {nodes: new vis.DataSet(this.nodes), edges: new vis.DataSet(this.edges)}
       }
       document.body.addEventListener('keydown', this.nodeEvent.bind(this))
       let self = this;
-      // this.network.on('dragEnd', function (params) {
-      //   for (let node of Object.values(self.nodes._data)) {
-      //     self.nodes.update({id: node.id, fixed: {x: false, y: false}});
-      //   }
-      // });
-      // this.network.on('dragStart', function(params) {
-      //   for (let node of Object.values(self.nodes._data)) {
-      //     if (node.id == self.selectedId()) continue;
-
-      //     self.nodes.update({id: node.id, fixed: {x: true, y: true}});
-      //   }
-      // });
     } 
 
     function displayPopup(data) {
-      console.log('popup', data)
       let checkbox = (text) => `<p><label><input class='title-filter' type="checkbox" name="${text}">${text}</label></p>`
       let html = data[1].map(d => checkbox(d.title)).join('');
       html += '<button onclick="return filterSelectedNodes()">Valider</button>'
@@ -469,64 +394,18 @@
       let popup = document.getElementById('popup');
       let data = popup.data;
       let selected_titles = [...document.querySelectorAll('input[type=checkbox]')].filter(x => x.checked).map(x => x.name);
-      console.log(selected_titles)
       data[1] = data[1].filter(x => selected_titles.includes(x.title));
       updateNetwork(data);
       popup.style.display = 'none'
     }
 
     var visDS = new NodesDataset()
-    // let networkCanvas = document.querySelector('canvas');
-
-    // function canvasCopy() {
-    //   let canvas = document.querySelector('canvas')
-    //   let copy = document.createElement('canvas');
-    //   copy.width = canvas.width, copy.height = canvas.height;
-
-    //   document.body.appendChild(copy)
-    //   copy.style.position = 'fixed';
-    //   copy.style.zIndex = -1
-    //   canvas_position = canvas.getBoundingClientRect()
-    //   copy.style.left = canvas_position.x+'px'; copy.style.top = canvas_position.y+'px';
-    //   console.log(copy)
-    //   return copy
-    // }
-
-    // const drawingModule = require('./utils/penTool')
-    // let drawingBtns = {
-    //   canvas: canvasCopy(),
-    //   color: document.getElementById('drawing-color'),
-    //   radius: document.getElementById('drawing-radius'),
-    // };
-
-    // document.addEventListener('DOMContentLoaded', function() {
-    //   console.log('content has loaded')
-    //   var myPen = drawingModule.penTool({ canvas: drawingBtns.canvas, color: drawingBtns.color, radius: drawingBtns.radius })
-
-    //   var attachEvents = (function() {
-    //     document.getElementById('pen').addEventListener('click', function() {
-    //       myPen.toggle();
-    //       this.classList.toggle('is-active');
-    //     })
-    //     document.getElementById('eraser').addEventListener('click', function() {
-    //       myPen.toggleEraser();
-    //       this.classList.toggle('is-active');
-    //     })
-    //     visDS.network.on('zoom', function() { myPen.transformContext(visDS.network.canvas.body.view) })
-    //     visDS.network.on('dragging', function() { myPen.transformContext(visDS.network.canvas.body.view) })
-    //     // visDS.network.on('zoom', function(p) { console.log(p) })
-    //     // visDS.network.on('dragging', function(p) { console.log(p) })
-    //   })()
-    // });
-
-
 
     const extract = {
       relatedTitles: (data) => data.pages.map(page => page.title),
       categoryTitles: (data) => data.categories.filter(category => !category.hidden).map(category => category.titles.canonical)
     }
     function prettify(string) {
-      //return string.includes('C:') ? string.split(':')[1] : string.slice(string.lastIndexOf(' '));
       return string.replace('Catégorie:', '')
     }
 
@@ -538,7 +417,6 @@
         categories: meta
       }
       visDS.addNode(props)
-      // new vis.Network(container, visDS.dataSet(), options={layout: {hierarchical: false}});
     }
 
     async function fillChilds(array) {
@@ -593,29 +471,5 @@
       }
     }
 
-    // function showRelations(title) {
-    //   wiki.relations(title).then(relations => {
-    //     let titles = relations.pages.map(page => page.title)
-    //     htmlRelations(titles)
-    //   })
-    // }
-
-    // function htmlRelations(relations) {
-    //   let list_elements = '<ul>' + relations.map(r => `
-    //     <li><a href=''>${r}</a></li>
-    //   `).join('') + '</ul>'
-    //   document.getElementById('response').innerHTML = list_elements
-    //   attachEvent();
-    // }
-
-    // function attachEvent() {
-    //   [...document.querySelectorAll('a')].map(el => el.addEventListener('click', function(e) {
-    //     e.preventDefault()
-    //     console.log(this.innerText)
-    //     showRelations(this.innerText)
-    //   }))
-    // }
-
-    link = (title) => `<a href=''></a>`
   </script>
 </html>
