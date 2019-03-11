@@ -5,12 +5,17 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bulma": "^0.7.4",
-    "electron": "^4.0.6"
+    "bulma": "^0.7.4"
+  },
+  "devDependencies": {
+    "electron": "^1.4.13",
+    "electron-builder": "^20.38.5"
   }
 }

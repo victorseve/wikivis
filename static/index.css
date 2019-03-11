@@ -1,0 +1,66 @@
+#network {
+  width: 100%;
+  height: 80vh;
+  border: 1px solid lightgray;
+  padding: 0px;
+}
+
+#popup {
+  display: none;
+  position: fixed;
+  z-index: 1;
+  background: white;
+  padding: 10px;
+  opacity: 0.9;
+  box-shadow: 3px 3px 13px 0px black;
+  border-radius: 5px;
+}
+canvas {
+  /* box-shadow: inset 0px 0px 18px 1px black; */
+}
+.input {
+  display: inline;
+} 
+.button {
+  display: inline;
+}
+.vis-config-item {
+  background: white !important;
+}
+#configure-panel {
+  width: 100%;
+}
+.vis-configuration-wrapper {
+  width: 100%
+}
+.vis-config-range {
+  width: 70px !important;
+}
+#node-configure {
+  display: none;
+  position: fixed;
+  z-index: 1;
+  background: white;
+  border-radius: 5px;
+  box-shadow: 3px 3px 5px 0 black;
+  padding: 10px;
+  width: 270px;
+}
+#node-configure input {
+  position: absolute;
+  left: 120px;
+}
+#node-configure .s1 {
+  margin-left: 10px;
+  font-style: italic;
+  font-weight: 500;
+}
+#node-configure .s2 {
+  margin-left: 20px;
+}
+.container {
+  margin-top: 4vh;
+}
+.is-active {
+  background: blue;
+}

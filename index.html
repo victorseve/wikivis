@@ -7,77 +7,9 @@
     <link rel="stylesheet" type="text/css" href='https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.css'>
     <link rel="stylesheet" type="text/css" href='node_modules/bulma/css/bulma.css'>
     <link rel="import" href="config.html">
+    <link rel="stylesheet" type="text/css" href='static/index.css'>
   </head>
 
-  <style>
-    #network {
-      width: 100%;
-      height: 80vh;
-      border: 1px solid lightgray;
-      padding: 0px;
-    }
-
-    #popup {
-      display: none;
-      position: fixed;
-      z-index: 1;
-      background: white;
-      padding: 10px;
-      opacity: 0.9;
-      box-shadow: 3px 3px 13px 0px black;
-      border-radius: 5px;
-    }
-    canvas {
-      /* box-shadow: inset 0px 0px 18px 1px black; */
-    }
-    .input {
-      display: inline;
-    } 
-    .button {
-      display: inline;
-    }
-    .vis-config-item {
-      background: white !important;
-    }
-    #configure-panel {
-      width: 100%;
-    }
-    .vis-configuration-wrapper {
-      width: 100%
-    }
-    .vis-config-range {
-      width: 70px !important;
-    }
-    #node-configure {
-      display: none;
-      position: fixed;
-      z-index: 1;
-      background: white;
-      border-radius: 5px;
-      box-shadow: 3px 3px 5px 0 black;
-      padding: 10px;
-      width: 270px;
-    }
-    #node-configure input {
-      position: absolute;
-      left: 120px;
-    }
-    #node-configure .s1 {
-      margin-left: 10px;
-      font-style: italic;
-      font-weight: 500;
-    }
-    #node-configure .s2 {
-      margin-left: 20px;
-    }
-    .container {
-      margin-top: 4vh;
-    }
-    .is-active {
-      background: blue;
-    }
-
-</style>
   <body class='container is-fluid'>
     <h1 class='title is-2'></h1>
     <div class='columns'>
@@ -117,23 +49,6 @@
       document.body.appendChild(el.cloneNode(true));
     })()
 
-
-
-  function matchNodeStyle(node, edges) {
-    var setInputValue = (name, value) => document.querySelector(`input[name=${name}]`).value = value;
-    document.querySelector(`input[name=node-border-toggle]`).checked = node.shapeProperties && node.shapeProperties.useBorderWithImage
-    setInputValue('node-size', node.size) 
-    setInputValue('node-border-width', node.borderWidth) 
-    setInputValue('node-border-color', node.color) 
-    setInputValue('node-font-size', node.font.size) 
-    setInputValue('node-font-color', node.font.color) 
-    setInputValue('node-font-back', node.font.background) 
-    setInputValue('edge-color', edges[0].color.color) 
-    setInputValue('edge-width', edges[0].width) 
-  }
-
-
-
   const options = {
     physics: { enabled: false },
     edges: {smooth: {enabled: true, type: 'continuous'}, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, selectionWidth: function(width) { return width*2; }},
@@ -154,14 +69,15 @@
       let edges = new vis.DataSet();
       let network = new vis.Network(container, {nodes: nodes, edges: edges}, options);
       let curr_id = 0;
-      let selected_node_id = null;
 
-      function dataToNode(props, color='', shape='image') {
+      function dataToNode(props) {
+        var image = (summary) => summary.thumbnail !== undefined ? summary.thumbnail.source : ''
+        var shape = (summary) => summary.thumbnail !== undefined ? 'image' : 'dot'
         return {
           id: curr_id++,
           label: props.summary.title,
-          image: props.summary.thumbnail !== undefined ? props.summary.thumbnail.source : shape='dot',
-          shape: shape,
+          image: image(props.summary),
+          shape: shape(props.summary),
           data: {summary: props.summary},
           font: {size: 14, color: '#000000', background: '#ffffff'},
           borderWidth: 1,
@@ -176,121 +92,127 @@
       }
 
       // Callback HELL!!
-      this.networkClickCallback = function(params) {
-        this.network_params = params
+      let selectionParameters = null
+
+      network.on('click', networkClickCallback)
+      network.on('dragStart', networkClickCallback)
+      network.on('oncontext', networkContextCallback)
+
+      function networkClickCallback(params) {
+        selectionParameters = params
         if (params.nodes.length) {
-          selected_node_id = params.nodes[0];
           showExtract(document.getElementById('response'), nodes.get(params.nodes[0]))
         }
       }
-      this.styleFormCallback = function() {
-        updateStyle(nodes.get(this.network_params.nodes), edges.get(this.network_params.edges), this)
-      }
-      this.styleFormCallback = this.styleFormCallback.bind(this)
-
-      this.applyStyleBtnCallback = function() {
-        updateStyle(nodes.get(this.network_params.nodes), edges.get(this.network_params.edges), this)
-        document.getElementById('node-configure').style.display = 'none'
-      }
-      this.applyStyleBtnCallback = this.applyStyleBtnCallback.bind(this);
-
-      (function(self) {
-        let style_form = document.getElementById('node-configure-form');
-        let apply_style_btn = document.getElementById('apply-custom-style');
-        style_form.addEventListener('change', self.styleFormCallback)
-        apply_style_btn.addEventListener('click', self.applyStyleBtnCallback)
-      })(this)
-
-      var hasNodesSelected = (params) => params.nodes!==undefined && params.nodes.length > 0;
-      var hasEdgesSelected = (params) => params.edges!==undefined && params.edges.length > 0;
-      var hasItemsSelected = (params) => hasNodesSelected(params) || hasEdgesSelected(params); 
-
-      this.networkContextCallback = function(params) {
-        if ( network.getNodeAt(params.pointer.DOM) === undefined ) {
-          if ( !hasItemsSelected(this.network_params) ) { return } 
-        } else {
-          params.nodes = [network.getNodeAt(params.pointer.DOM)], 
-          network.selectNodes(params.nodes)
-          params.edges = network.getConnectedEdges(network.getNodeAt(params.pointer.DOM))
-          this.network_params = params
-        }
-        let customNodeDiv = document.getElementById('node-configure')
-        if (!params.nodes.length) {
-          document.getElementById('node-configure-form-nodes').style.display='none';
-        } else {
-          document.getElementById('node-configure-form-nodes').style.display='block';
-        }
-        customNodeDiv.style.display = 'block'
-        customNodeDiv.style.top = Math.min(window.innerHeight-customNodeDiv.offsetHeight-25, params.pointer.DOM.y) + 'px'
-        customNodeDiv.style.left = Math.min(window.innerWidth-customNodeDiv.offsetWidth-25, params.pointer.DOM.x) + 'px'
-        matchNodeStyle(nodes.get(params.nodes[0]), edges.get(params.edges))
-      }
-      network.on('click', this.networkClickCallback.bind(this))
-      network.on('dragStart', this.networkClickCallback.bind(this))
-      network.on('oncontext', this.networkContextCallback.bind(this))
-
-      function updateStyle(affected_nodes, affected_edges) {
-        var inputValue = (name) => document.querySelector(`input[name=${name}]`).value;
-        
-        nodes.update(affected_nodes.map(node => updateNodeStyle(node)))
-        edges.update(affected_edges.map(edge => updateEdgeStyle(edge)))
-
-        function updateNodeStyle(node) {
-          node.shapeProperties = { useBorderWithImage: document.querySelector(`input[name=node-border-toggle]`).checked }
-          node.size = parseInt(inputValue('node-size'))
-          node.borderWidth = parseInt(inputValue('node-border-width'))
-          node.borderWidthSelected = 2*node.borderWidth
-          node.color = inputValue('node-border-color')
-          node.font.size = parseInt(inputValue('node-font-size'))
-          node.font.color = inputValue('node-font-color')
-          node.font.background = inputValue('node-font-back')
-          return node
-        }
-        function updateEdgeStyle(edge) {
-          edge.color = {color: inputValue('edge-color'), highlight: inputValue('edge-color'), hover: inputValue('edge-color')}
-          edge.width = parseInt(inputValue('edge-width'))
-          return edge
-        }
-      }
-
-      // End of Callback HELL!!
-
       function showExtract(target, node) {
         let extract = node.data.summary.extract_html;
         extract += `<p><a href="${node.data.summary.content_urls.desktop.page}" target="_blank" >Article Wikipedia</a></p>`
         target.innerHTML = extract
       }
 
-      this.addNode = function(props) {
-        var node_id = null;
-        if (nodeIndexFromTitle(props.summary) === undefined) {
-          node_id = curr_id
-          nodes.add(dataToNode(props, '', shape='image'))
+      var hasNodesSelected = (params) => params.nodes!==undefined && params.nodes.length > 0;
+      var hasEdgesSelected = (params) => params.edges!==undefined && params.edges.length > 0;
+      var hasItemsSelected = (params) => hasNodesSelected(params) || hasEdgesSelected(params); 
+
+      function networkContextCallback(params) {
+        if ( network.getNodeAt(params.pointer.DOM) === undefined ) {
+          if ( !hasItemsSelected(selectionParameters) ) { return } 
         } else {
-          node_id = nodeIndexFromTitle(props.summary)
+          params.nodes = [network.getNodeAt(params.pointer.DOM)], 
+          network.selectNodes(params.nodes)
+          params.edges = network.getConnectedEdges(network.getNodeAt(params.pointer.DOM))
+          selectionParameters = params
+        }
+        showStyleForm(params) 
+        matchNodeStyle(nodes.get(params.nodes[0]), edges.get(params.edges))
+        network.storePositions();
+      }
+
+      function showStyleForm(params) {
+        let div = document.getElementById('node-configure')
+        if (!params.nodes.length) {
+          document.getElementById('node-configure-form-nodes').style.display='none';
+        } else {
+          document.getElementById('node-configure-form-nodes').style.display='block';
+        }
+        div.style.display = 'block'
+        div.style.top = Math.min(window.innerHeight-div.offsetHeight-25, params.pointer.DOM.y) + 'px'
+        div.style.left = Math.min(window.innerWidth-div.offsetWidth-25, params.pointer.DOM.x) + 'px'
+      }
+
+      function matchNodeStyle(node, edges) {
+        var setInputValue = (name, value) => document.querySelector(`input[name=${name}]`).value = value;
+        document.querySelector(`input[name=node-border-toggle]`).checked = node.shapeProperties && node.shapeProperties.useBorderWithImage
+        setInputValue('node-size', node.size) 
+        setInputValue('node-border-width', node.borderWidth) 
+        setInputValue('node-border-color', node.color) 
+        setInputValue('node-font-size', node.font.size) 
+        setInputValue('node-font-color', node.font.color) 
+        setInputValue('node-font-back', node.font.background) 
+        setInputValue('edge-color', edges[0].color.color) 
+        setInputValue('edge-width', edges[0].width) 
+      }
+
+      document.getElementById('node-configure-form').addEventListener('change', applyStyle)
+      document.getElementById('apply-custom-style').addEventListener('click', closeStyleForm)
+
+      function applyStyle() {
+        updateStyle(nodes.get(selectionParameters.nodes), edges.get(selectionParameters.edges))
+      }
+      function closeStyleForm() {
+        document.getElementById('node-configure').style.display = 'none'
+      }
+
+      function updateStyle(affected_nodes, affected_edges) {        
+        nodes.update(affected_nodes.map(node => updateNodeStyle(node)))
+        edges.update(affected_edges.map(edge => updateEdgeStyle(edge)))
+      }
+      function updateNodeStyle(node) {
+        var inputValue = (name) => document.querySelector(`input[name=${name}]`).value;
+        node.shapeProperties = { useBorderWithImage: document.querySelector(`input[name=node-border-toggle]`).checked }
+        node.size = parseInt(inputValue('node-size'))
+        node.borderWidth = parseInt(inputValue('node-border-width'))
+        node.borderWidthSelected = 2*node.borderWidth
+        node.color = inputValue('node-border-color')
+        node.font.size = parseInt(inputValue('node-font-size'))
+        node.font.color = inputValue('node-font-color')
+        node.font.background = inputValue('node-font-back')
+        return node
+      }
+      function updateEdgeStyle(edge) {
+        var inputValue = (name) => document.querySelector(`input[name=${name}]`).value;
+        edge.color = {color: inputValue('edge-color'), highlight: inputValue('edge-color'), hover: inputValue('edge-color')}
+        edge.width = parseInt(inputValue('edge-width'))
+        return edge
+      }
+
+      // End of Callback HELL!!
+
+      addNode = function(props) {
+        let node_id = nodeIndexFromTitle(props.summary) || curr_id
+        if (nodeIndexFromTitle(props.summary) === undefined) {
+          nodes.add(dataToNode(props))
         }
         let children_ids = [];
-        props.categories.map(summary => addChildren(summary))
+        props.categories.map(summary => addChildren(node_id, summary, children_ids))
 
         disperseNodes(node_id, children_ids)
         network.selectNodes(children_ids.concat(node_id))
+      }
 
-        function nodeIndexFromTitle(summary) {
-          return nodes.getIds({filter: node => node.label == summary.title})[0]
+      function nodeIndexFromTitle(summary) {
+        return nodes.getIds({filter: node => node.label == summary.title})[0]
+      }
+      function addEdge(startId, nodeId=curr_id-1) {
+        edges.add({from: startId, to: nodeId, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, width: 1})
+      }
+      function addChildren(node_id, summary, children_ids) {
+        if (nodeIndexFromTitle(summary) === undefined) {
+          console.log(summary)
+          children_ids.push(curr_id)
+          nodes.add(dataToNode({summary: summary}));
         }
-        function addEdge(startId, nodeId=curr_id-1) {
-          edges.add({from: startId, to: nodeId, color: {color: '#2b7ce9', highlight: '#2b7ce9', hover: '#2b7ce9'}, width: 1})
-        }
-        function addChildren(summary) {
-          let id = nodeIndexFromTitle(summary)
-          if (id === undefined) {
-            children_ids.push(curr_id)
-            nodes.add(dataToNode({summary: summary}));
-            addEdge(node_id)
-          } else {
-            addEdge(node_id, id)
-          }
-        }
+        addEdge(node_id)
       }
       function disperseNodes(parentId, childrenIds) {
         const radius = 200;
@@ -298,6 +220,7 @@
         var position = (center, curr, total) => [xi + radius*Math.cos(2*curr*Math.PI/total), yi + radius*Math.sin(2*curr*Math.PI/total)] 
         childrenIds.forEach((id, index) => network.moveNode(id, ...position(parentId, index, childrenIds.length)))
       }
+
       function keyEvent(e) {
         if (document.activeElement === document.getElementById('search')) return;
         switch(e.key) {
@@ -329,71 +252,72 @@
             ...edge_data.filter(e => e.to==node.id).map(e => e.from)
           ]
         }
-        var isDetached = (node) => edge_map[node.id].length==1 && edge_map[node.id][0] == selected_node_id;
+        var isDetached = (node) => edge_map[node.id].length==1 && edge_map[node.id][0] == id;
         let detached_nodes = nodes.getIds({filter: isDetached})
         nodes.remove(detached_nodes)
-        let deprecated_edges = edges.getIds({filter: edge => edge.from == selected_node_id})
+        let deprecated_edges = edges.getIds({filter: edge => edge.from == id})
         edges.remove(deprecated_edges)
       }
-      this.dataSet = function() {
-        return {nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges)}
-      }
       document.body.addEventListener('keydown', keyEvent)
+
+      document.querySelector('form').addEventListener('submit', function(e) {
+        e.preventDefault()
+        getTitleInformation()
+      })
+
+      function getTitleInformation() {
+        let title = document.querySelector('input[name=title]').value
+        if (!title.length) return
+        document.querySelector('input[name=title]').value = ''
+        wiki.all(title)
+        .then(array => fillChilds(array))
+        .then(array => displayPopup(array))
+        .catch(err => console.log(err))
+      }
+
+      async function fillChilds(array) {
+        var relatedTitles = (data) => data.pages.map(page => page.title)
+        var categoryTitles = (data) => data.categories.filter(category => !category.hidden).map(category => category.titles.canonical)
+        let [summary, meta, relations] = array
+        let d =  await Promise.all([
+          wiki.images(relatedTitles(relations)),
+          wiki.images(categoryTitles(meta))
+        ])
+        return [summary, ...d]
+      }
+
+      this.filterSelectedNodes = function() {
+        let popup = document.getElementById('popup');
+        let data = popup.data;
+        let selected_titles = [...document.querySelectorAll('input[type=checkbox]')].filter(x => x.checked).map(x => x.name);
+        data[1] = data[1].filter(x => selected_titles.includes(x.title));
+        updateNetwork(data);
+        popup.style.display = 'none'
+      }
+
+      function updateNetwork(array) {
+        let [summary, meta, relations] = array
+        let props = {
+          summary: summary,
+          relations: relations, 
+          categories: meta
+        }
+        addNode(props)
+      }
     } 
 
     function displayPopup(data) {
-      let checkbox = (text) => `<p><label><input class='title-filter' type="checkbox" name="${text}">${text}</label></p>`
-      let html = data[1].map(d => checkbox(d.title)).join('');
-      html += '<button onclick="return filterSelectedNodes()">Valider</button>'
-      let popup = document.getElementById('popup')
-      popup.style.display = 'block'
-      popup.innerHTML = html
-      popup.style.top = '200px'; popup.style.left = '300px';
-      popup.data = data
-    }
-
-    function filterSelectedNodes() {
-      let popup = document.getElementById('popup');
-      let data = popup.data;
-      let selected_titles = [...document.querySelectorAll('input[type=checkbox]')].filter(x => x.checked).map(x => x.name);
-      data[1] = data[1].filter(x => selected_titles.includes(x.title));
-      updateNetwork(data);
-      popup.style.display = 'none'
-    }
+        let checkbox = (text) => `<p><label><input class='title-filter' type="checkbox" name="${text}">${text}</label></p>`
+        let html = data[1].map(d => checkbox(d.title)).join('');
+        html += '<button onclick="return visDS.filterSelectedNodes()">Valider</button>'
+        let popup = document.getElementById('popup')
+        popup.style.display = 'block'
+        popup.innerHTML = html
+        popup.style.top = '200px'; popup.style.left = '300px';
+        popup.data = data
+      }
 
     var visDS = new NodesDataset()
-
-    const extract = {
-      relatedTitles: (data) => data.pages.map(page => page.title),
-      categoryTitles: (data) => data.categories.filter(category => !category.hidden).map(category => category.titles.canonical)
-    }
-
-    function updateNetwork(array) {
-      let [summary, meta, relations] = array
-      let props = {
-        summary: summary,
-        relations: relations, 
-        categories: meta
-      }
-      visDS.addNode(props)
-    }
-
-    async function fillChilds(array) {
-      let [summary, meta, relations] = array
-      let d =  await Promise.all([
-        wiki.images(extract.relatedTitles(relations)),
-        wiki.images(extract.categoryTitles(meta))
-      ])
-      return [summary, ...d]
-    }
-
-    document.querySelector('form').addEventListener('submit', function(e) {
-      let title = document.querySelector('input[name=title]').value
-      if (!title.length) return
-      document.querySelector('input[name=title]').value = ''
-      e.preventDefault()
-      wiki.all(title).then(array => fillChilds(array)).then(array => displayPopup(array)).catch(err => console.log(err))
-    })
 
     const saveManager = require('./utils/saveManager');
     document.getElementById('btn-saveGraph').addEventListener('click', () => saveManager.save(visDS))
