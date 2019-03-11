@@ -1,4 +1,4 @@
-const { dialog } = require('electron').remote
+const { dialog } = require('../node_modules/electron').remote
 const fs = require('fs');
 
 var saveManager = (function() {

@@ -12,7 +12,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bulma": "^6.4.1"
+    "browserify": "^16.2.3",
+    "bulma": "^6.4.1",
+    "express": "^4.16.4"
   },
   "devDependencies": {
     "electron": "^4.0.8",

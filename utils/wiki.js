@@ -1,7 +1,7 @@
 module.exports = (function() {
 
   this.suggestions = function(search) {
-    let url = `https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${search}&format=json`
+    let url = `https://fr.wikipedia.org/w/api.php?origin=*&action=query&list=search&srsearch=${search}&format=json`
     return fetch(url)
             .then(response => response.json())
             .catch(error => console.log(error))
