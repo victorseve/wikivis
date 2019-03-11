@@ -91,7 +91,6 @@
         curr_id = Math.max(...dataset.nodes.map(x => x.id)) + 1
       }
 
-      // Callback HELL!!
       let selectionParameters = null
 
       network.on('click', networkClickCallback)
@@ -186,8 +185,6 @@
         return edge
       }
 
-      // End of Callback HELL!!
-
       addNode = function(props) {
         let node_id = nodeIndexFromTitle(props.summary) || curr_id
         if (nodeIndexFromTitle(props.summary) === undefined) {
@@ -208,11 +205,22 @@
       }
       function addChildren(node_id, summary, children_ids) {
         if (nodeIndexFromTitle(summary) === undefined) {
-          console.log(summary)
           children_ids.push(curr_id)
           nodes.add(dataToNode({summary: summary}));
+          addEdge(node_id)
+          //wiki.relations(summary.title).then(relations => connectNode(curr_id-1, relations.pages))
+        } else {
+          let id = nodes.get(nodeIndexFromTitle(summary)).id
+          addEdge(node_id, id);
+          children_ids.push(id)
         }
-        addEdge(node_id)
+      }
+      function connectNode(id, relations) {
+        let titles = relations.map(x => x.title)
+        let nodesToConnect = Object.values(nodes._data).filter(n => titles.indexOf(n.label) > -1)
+        for (let node of nodesToConnect) {
+          addEdge(id, node.id)
+        }
       }
       function disperseNodes(parentId, childrenIds) {
         const radius = 200;
@@ -286,7 +294,7 @@
         return [summary, ...d]
       }
 
-      this.filterSelectedNodes = function() {
+      function filterSelectedNodes() {
         let popup = document.getElementById('popup');
         let data = popup.data;
         let selected_titles = [...document.querySelectorAll('input[type=checkbox]')].filter(x => x.checked).map(x => x.name);
@@ -303,6 +311,13 @@
           categories: meta
         }
         addNode(props)
+      }
+
+      return {
+        nodes: nodes,
+        edges: edges,
+        network: network,
+        filterSelectedNodes: filterSelectedNodes
       }
     } 
 
